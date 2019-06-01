@@ -244,7 +244,7 @@ def start_clock():
 	timeStep = 1
 	while True:
 		tempoAtual += timeStep
-		t.sleep(0.25)
+		t.sleep(0.50)
 
 
 
