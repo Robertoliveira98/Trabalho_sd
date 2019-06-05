@@ -28,12 +28,14 @@ global liderId
 global timeList
 global tempoAtual
 global ultimoId
+global stop
 
 ehLider = False
 liderId = ''
 timeList = []
 tempoAtual = 0
 ultimoId = []
+stop = False
 
 
 class Mensagem():
@@ -43,44 +45,6 @@ class Mensagem():
 		self.remetenteId = remetenteId
 		self.destinoId = destinoId
 
-
-
-#--------------BULLY
-
-def startBully():
-	global ehLider
-	print('')
-	print('Iniciando eleição.')
-	msg = Mensagem(INICIA_ELEICAO, PID, myId, TODOS)
-	serial_data = pickle.dumps(msg)
-	print('Enviando para todos em multicast.')
-	mySocket.sendto(serial_data, (GRUPO_MC, PORTA))
-
-	print('Esperando respostas.')
-	timeoutMark = t.time() + 1.0
-	while True:
-		timeOut = timeoutMark - t.time()
-		if timeOut > 0:
-			readables, writeables, exceptions = select.select([mySocket], [], [mySocket], timeOut)
-		else:
-			print('')
-			print('Timout: não houve resposta. Torna-se lider.')
-			ehLider = True
-			liderId = myId
-			enviaLider()
-			startBerkeley()
-			break
-
-		if readables:
-			received_data = receive_message()
-
-			if received_data[0] == RESPOSTA_ELEICAO:
-				if received_data[2] == myId:
-					print('Não é lider. Há um PID maior.')
-				ehLider = False
-				while True:
-					receive_message()
-				break
 
 
 #-----------GERENCIAR MENSAGENS
@@ -155,6 +119,8 @@ def receive_message():
 			print('')
 			print('FIM')
 			print('')
+			global stop
+			stop = True
 			sys.exit(0)
 		else:
 			#print('Mensagem não reconhecido')
@@ -164,6 +130,44 @@ def receive_message():
 		return (None, None)
 
 
+#--------------BULLY
+
+def startBully():
+	global ehLider
+	print('')
+	print('Iniciando eleição.')
+	msg = Mensagem(INICIA_ELEICAO, PID, myId, TODOS)
+	serial_data = pickle.dumps(msg)
+	print('Enviando para todos em multicast.')
+	mySocket.sendto(serial_data, (GRUPO_MC, PORTA))
+
+	print('Esperando respostas.')
+	timeoutMark = t.time() + 1.0
+	while True:
+		timeOut = timeoutMark - t.time()
+		if timeOut > 0:
+			readables, writeables, exceptions = select.select([mySocket], [], [mySocket], timeOut)
+		else:
+			print('')
+			print('Timout: não houve resposta. Torna-se lider.')
+			ehLider = True
+			liderId = myId
+			enviaLider()
+			startBerkeley()
+			break
+
+		if readables:
+			received_data = receive_message()
+
+			if received_data[0] == RESPOSTA_ELEICAO:
+				if received_data[2] == myId:
+					print('Não é lider. Há um PID maior.')
+				ehLider = False
+				while True:
+					receive_message()
+				break
+
+
 #------ANUNCIAR LIDER
 
 def enviaLider():
@@ -171,7 +175,6 @@ def enviaLider():
 	msg = Mensagem(LIDER_ATUAL, myId, myId, TODOS)
 	serial_data = pickle.dumps(msg)
 	mySocket.sendto(serial_data, (GRUPO_MC, PORTA))
-
 
 
 #----------BERKELEY
@@ -233,6 +236,11 @@ def startBerkeley():
 			msg = Mensagem(TERMINA_COMUNICACAO, 0, myId, TODOS)
 			serial_data = pickle.dumps(msg)
 			mySocket.sendto(serial_data, (GRUPO_MC, PORTA))
+			print('')
+			print('FIM')
+			print('')
+			global stop
+			stop = True
 			sys.exit(0)
 
 
@@ -240,12 +248,13 @@ def startBerkeley():
 
 def start_clock():
 	global tempoAtual
+	global stop
 	# timeStep = randint(1,5)
 	timeStep = 1
-	while True:
+	stop = False
+	while stop == False:
 		tempoAtual += timeStep
 		t.sleep(0.50)
-
 
 
 #--------------------MAIN
