@@ -3,11 +3,9 @@ import struct
 import select
 import sys
 import os
-import netifaces
-import pickle
+import pickle 
 import time as t
 from threading import Thread
-from random import randint
 
 
 INICIA_ELEICAO = 10
