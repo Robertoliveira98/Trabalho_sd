@@ -159,7 +159,11 @@ def startBully():
 			received_data = receive_message()
 
 			if received_data[0] == RESPOSTA_ELEICAO:
+<<<<<<< HEAD
 				if received_data[2] == myId: #verifica se a mensagem eh para ele
+=======
+				if received_data[2] == myId:
+>>>>>>> cfe6e26e04785fa66a04b3a14a36d9ae458eabad
 					print('Não é lider. Há um PID maior.')
 				ehLider = False
 				while True:
@@ -245,6 +249,10 @@ def startBerkeley():
 def start_clock():
 	global tempoAtual
 	global stop
+<<<<<<< HEAD
+=======
+	# timeStep = randint(1,5)
+>>>>>>> cfe6e26e04785fa66a04b3a14a36d9ae458eabad
 	timeStep = 1
 	stop = False
 	while stop == False:
