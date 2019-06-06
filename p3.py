@@ -17,6 +17,7 @@ INICIA_BERKELEY = 40
 RESPOSTA_BERKELEY = 50
 AJUSTE_BERKELEY = 60
 TERMINA_COMUNICACAO = 99
+
 TODOS = 0
 
 GRUPO_MC = '224.0.0.0'
@@ -28,12 +29,14 @@ global liderId
 global timeList
 global tempoAtual
 global ultimoId
+global stop
 
 ehLider = False
 liderId = ''
 timeList = []
 tempoAtual = 0
 ultimoId = []
+stop = False
 
 
 class Mensagem():
@@ -43,6 +46,87 @@ class Mensagem():
 		self.remetenteId = remetenteId
 		self.destinoId = destinoId
 
+
+
+#-----------GERENCIAR MENSAGENS
+
+def receive_message():
+	#print('Lendo mensagem...', )
+	serial_data, sender_addr = mySocket.recvfrom(512)
+	received_data = pickle.loads(serial_data)
+
+	global tempoAtual
+	global ehLider
+	if received_data.remetenteId != myId: #impede que leia uma mensagem enviada por ele msm
+		if received_data.action == INICIA_ELEICAO:
+			print('')
+			print('Pedido de eleição recebido.')
+			if int(PID) > int(received_data.msg): #se for maior inicia bully dnv
+				print('\n\nTem PID maior (', PID, ' > ', int(received_data.msg), '). Enviando resposta.')
+				response = Mensagem(RESPOSTA_ELEICAO, 0, myId, received_data.remetenteId)
+				serial_response = pickle.dumps(response)
+				mySocket.sendto(serial_response, (GRUPO_MC, PORTA))
+				startBully();
+				return (INICIA_ELEICAO, True)
+
+			print('') #se for menor n faz nada
+			print('Tem PID menor (', PID, ' < ', int(received_data.msg), '). NAO envia nada.')
+			return (INICIA_ELEICAO, False)
+
+		elif received_data.action == RESPOSTA_ELEICAO: #retorna para bully
+			print('Rebendo resposta de eleição.')
+			return (RESPOSTA_ELEICAO, True, received_data.destinoId)
+
+		elif received_data.action == LIDER_ATUAL:
+			print('Definindo novo lider para: ', received_data.msg)
+			liderId = received_data.msg
+			return (LIDER_ATUAL, True)
+
+		elif received_data.action == INICIA_BERKELEY:
+			ajuste = tempoAtual - received_data.msg
+			print('')
+			print('----------------------------------------------------------')
+			print('Pedido de valor de Atraso para o algoritmo de Berkeley.')
+			print('Tempo atual: ', tempoAtual,' - Atraso enviado: ', ajuste, '.')
+			print('----------------------------------------------------------')
+			response = Mensagem(RESPOSTA_BERKELEY, ajuste, myId, TODOS)
+			serial_response = pickle.dumps(response)
+			mySocket.sendto(serial_response, (GRUPO_MC, PORTA))
+			return (INICIA_BERKELEY, True)
+
+		elif (received_data.action == RESPOSTA_BERKELEY) & (ehLider == True): #se for o lider recebe atrasos
+			print('')
+			print('Adiciona o atraso do escravo à lista de tempo (', received_data.msg, ').')
+			timeList.append((sender_addr, received_data.msg))
+			global ultimoId
+			ultimoId.append(received_data.remetenteId)
+			return (RESPOSTA_BERKELEY, True)
+
+		elif received_data.action == AJUSTE_BERKELEY:
+			if received_data.destinoId == myId:
+				print('')
+				print('')
+				print('----------------------------------------------------------')
+				print('Ajusta o tempo de acordo com o enviado pelo lider (', received_data.msg,').')
+				print(' - Tempo antes do ajuste: ', tempoAtual, '.')
+				tempoAtual = received_data.msg + tempoAtual
+				print(' - Tempo ajustado: ', tempoAtual, '.')
+				print('----------------------------------------------------------')
+				print('')
+				print('Lendo mensagens...')
+				print('')
+				return (AJUSTE_BERKELEY, True)
+		elif received_data.action == TERMINA_COMUNICACAO:
+			print('')
+			print('FIM')
+			print('')
+			global stop
+			stop = True
+			sys.exit(0)
+		else:
+			return None
+	else:
+		return (None, None)
 
 
 #--------------BULLY
@@ -75,93 +159,12 @@ def startBully():
 			received_data = receive_message()
 
 			if received_data[0] == RESPOSTA_ELEICAO:
-				if received_data[2] == myId:
+				if received_data[2] == myId: #verifica se a mensagem eh para ele
 					print('Não é lider. Há um PID maior.')
 				ehLider = False
 				while True:
 					receive_message()
 				break
-
-
-#-----------GERENCIAR MENSAGENS
-
-def receive_message():
-	#print('Lendo mensagem...', )
-	serial_data, sender_addr = mySocket.recvfrom(512)
-	received_data = pickle.loads(serial_data)
-
-	global tempoAtual
-	global ehLider
-	if received_data.remetenteId != myId:
-		if received_data.action == INICIA_ELEICAO:
-			print('')
-			print('Pedido de eleição recebido.')
-			if int(PID) > int(received_data.msg):
-				print('\n\nTem PID maior (', PID, ' > ', int(received_data.msg), '). Enviando resposta.')
-				response = Mensagem(RESPOSTA_ELEICAO, 0, myId, received_data.remetenteId)
-				serial_response = pickle.dumps(response)
-				mySocket.sendto(serial_response, (GRUPO_MC, PORTA))
-				startBully();
-				return (INICIA_ELEICAO, True)
-
-			print('')
-			print('Tem PID menor (', PID, ' < ', int(received_data.msg), '). NAO envia nada.')
-			return (INICIA_ELEICAO, False)
-
-		elif received_data.action == RESPOSTA_ELEICAO:
-			print('Rebendo resposta de eleição.')
-			return (RESPOSTA_ELEICAO, True, received_data.destinoId)
-
-		elif received_data.action == LIDER_ATUAL:
-			print('Definindo novo lider para: ', received_data.msg)
-			liderId = received_data.msg
-			return (LIDER_ATUAL, True)
-
-		elif received_data.action == INICIA_BERKELEY:
-			adjust = tempoAtual - received_data.msg
-			print('')
-			print('----------------------------------------------------------')
-			print('Pedido de valor de Atraso para o algoritmo de Berkeley.')
-			print('Tempo atual: ', tempoAtual,' - Atraso enviado: ', adjust, '.')
-			print('----------------------------------------------------------')
-			response = Mensagem(RESPOSTA_BERKELEY, adjust, myId, TODOS)
-			serial_response = pickle.dumps(response)
-			mySocket.sendto(serial_response, (GRUPO_MC, PORTA))
-			return (INICIA_BERKELEY, True)
-
-		elif (received_data.action == RESPOSTA_BERKELEY) & (ehLider == True):
-			print('')
-			print('Adiciona o atraso do escravo à lista de tempo (', received_data.msg, ').')
-			timeList.append((sender_addr, received_data.msg))
-			global ultimoId
-			ultimoId.append(received_data.remetenteId)
-			return (RESPOSTA_BERKELEY, True)
-
-		elif received_data.action == AJUSTE_BERKELEY:
-			if received_data.destinoId == myId:
-				print('')
-				print('')
-				print('----------------------------------------------------------')
-				print('Ajusta o tempo de acordo com o enviado pelo lider (', received_data.msg,').')
-				print(' - Tempo antes do ajuste: ', tempoAtual, '.')
-				tempoAtual = received_data.msg + tempoAtual
-				print(' - Tempo ajustado: ', tempoAtual, '.')
-				print('----------------------------------------------------------')
-				print('')
-				print('Lendo mensagens...')
-				print('')
-				return (AJUSTE_BERKELEY, True)
-		elif received_data.action == TERMINA_COMUNICACAO:
-			print('')
-			print('FIM')
-			print('')
-			sys.exit(0)
-		else:
-			#print('Mensagem não reconhecido')
-			return None
-	else:
-		#print('loopback')
-		return (None, None)
 
 
 #------ANUNCIAR LIDER
@@ -171,7 +174,6 @@ def enviaLider():
 	msg = Mensagem(LIDER_ATUAL, myId, myId, TODOS)
 	serial_data = pickle.dumps(msg)
 	mySocket.sendto(serial_data, (GRUPO_MC, PORTA))
-
 
 
 #----------BERKELEY
@@ -202,12 +204,9 @@ def startBerkeley():
 
 	for _, time in timeList:
 		somaAtrasos += int(time)
-		# print(' - ', time)
-	# print('Somatorio: ', somaAtrasos)
 
 	mediaAtrasos = int(somaAtrasos / (len(timeList) + 1))
 
-	#print('Média de tempo: ', mediaAtrasos)
 	print('Envia os ajustes aos escravos.')
 	for _, time in timeList:
 		ajuste = mediaAtrasos - int(time)
@@ -236,6 +235,8 @@ def startBerkeley():
 			print('')
 			print('FIM')
 			print('')
+			global stop
+			stop = True
 			sys.exit(0)
 
 
@@ -243,12 +244,12 @@ def startBerkeley():
 
 def start_clock():
 	global tempoAtual
-	# timeStep = randint(1,5)
+	global stop
 	timeStep = 1
-	while True:
+	stop = False
+	while stop == False:
 		tempoAtual += timeStep
 		t.sleep(0.75)
-
 
 
 #--------------------MAIN
